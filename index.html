@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pool</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#020813; }
+
+    .pool {
+      position:fixed; inset:0;
+      background-image:url('./tiles.jpg');
+      background-size:cover; background-position:center;
+      z-index:1;
+    }
+
+    .daki {
+      position:fixed; z-index:10; cursor:grab;
+      transform-origin:center center; border-radius:18px;
+      box-shadow:inset 0 4px 12px rgba(255,255,255,0.7), inset 0 -6px 14px rgba(0,40,110,0.18);
+      border:1px solid rgba(255,255,255,0.35);
+      overflow:hidden; background-size:cover; background-position:center;
+    }
+    .daki:active { cursor:grabbing; }
+    .daki::before {
+      content:''; position:absolute; inset:-2px; border-radius:20px;
+      border:1.5px solid rgba(0,210,255,0.25); filter:blur(1px);
+      pointer-events:none; z-index:5;
+    }
+    .daki-reflection {
+      position:absolute; inset:0; background-image:url('./tiles.jpg');
+      background-size:240px; mix-blend-mode:soft-light; opacity:0.38;
+      pointer-events:none; z-index:3;
+    }
+    .daki-submersion {
+      position:absolute; inset:0;
+      background:linear-gradient(to top,#0044cc,#0099ff);
+      mix-blend-mode:overlay; opacity:0.05; pointer-events:none; z-index:2;
+    }
+    .daki-wave-overlay {
+      position:absolute; inset:0; border-radius:18px;
+      pointer-events:none; z-index:4; mix-blend-mode:overlay; opacity:0;
+    }
+    .daki-shadow {
+      position:fixed; border-radius:18px; background:#001630;
+      filter:blur(14px); z-index:9; pointer-events:none; mix-blend-mode:multiply;
+    }
+
+    /* ── PANEL ── */
+    #panel-overlay {
+      display:none; position:fixed; inset:0; z-index:100;
+      background:rgba(2,8,19,0.85); backdrop-filter:blur(12px);
+      align-items:center; justify-content:center; padding:20px;
+    }
+    #panel-box {
+      width:90%; max-width:680px; max-height:90vh;
+      position:relative; display:flex; flex-direction:column;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:4px; box-shadow:0 0 80px rgba(0,200,255,0.08);
+    }
+    #panel-header { padding:36px 48px 0; flex-shrink:0; }
+    #panel-close {
+      position:absolute; top:16px; right:20px;
+      background:none; border:none; color:#555;
+      font-family:monospace; font-size:20px; cursor:pointer;
+    }
+    #panel-close:hover { color:#fff; }
+    #panel-sub {
+      margin-bottom:10px; color:#444; font-family:monospace;
+      font-size:9px; letter-spacing:5px; text-transform:uppercase;
+    }
+    #panel-title {
+      margin-bottom:20px; color:#fff; font-family:Arial,sans-serif;
+      font-size:26px; font-weight:bold; letter-spacing:1px;
+    }
+    #panel-scroll {
+      flex:1; overflow-y:auto; padding:0 48px 36px;
+      scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.15) transparent;
+    }
+    #panel-scroll::-webkit-scrollbar { width:4px; }
+    #panel-scroll::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:2px; }
+
+    #panel-image-wrap { display:none; margin-bottom:24px; border-radius:4px; overflow:hidden; }
+    #panel-image { width:100%; display:block; border-radius:4px; }
+
+    #panel-video-wrap { display:none; margin-bottom:24px; border-radius:4px; overflow:hidden; }
+    #panel-video { width:100%; display:block; border-radius:4px; }
+
+    /* book panel preview */
+    #panel-book-wrap { display:none; margin-bottom:24px; }
+    #panel-book-toolbar {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; margin-bottom:10px;
+    }
+    #panel-book-status { color:#666; font-family:monospace; font-size:10px; letter-spacing:1px; }
+    #panel-book-actions { display:flex; gap:8px; }
+    .book-mini-btn {
+      border:1px solid rgba(255,255,255,0.12); border-radius:2px;
+      padding:6px 10px; background:rgba(255,255,255,0.04);
+      color:#777; font-family:monospace; font-size:11px; cursor:pointer;
+    }
+    .book-mini-btn:hover { color:#fff; background:rgba(255,255,255,0.10); }
+    
+    #panel-book-stage {
+      position:relative;
+      overflow:hidden;
+      margin:0 auto;
+      border-radius:0;
+      background:transparent;
+    }
+    #panel-book,
+    #fs-book {
+      position:absolute;
+      top:50%; left:50%;
+      transform:translate(-50%, -50%);
+    }
+
+    #panel-book .page,
+    #fs-book .page,
+    #panel-book .turn-page-wrapper,
+    #fs-book .turn-page-wrapper {
+      margin:0 !important;
+      padding:0 !important;
+      background:transparent !important;
+    }
+    .book-page-img {
+      width:100%; height:100%; display:block;
+      object-fit:fill;
+      background:transparent;
+    }
+
+    #panel-body {
+      color:#888; font-family:monospace; font-size:13px;
+      line-height:2; white-space:pre-line;
+    }
+
+    /* ── FULLSCREEN BOOK ── */
+    #book-fullscreen-overlay {
+      display:none; position:fixed; inset:0; z-index:200;
+      flex-direction:column; background:#090b10;
+    }
+    #book-fs-toolbar {
+      display:flex; align-items:center; gap:14px; flex-shrink:0;
+      padding:12px 20px; border-bottom:1px solid rgba(255,255,255,0.06);
+      background:#0d1016;
+    }
+    #book-fs-info, #book-fs-hint {
+      color:#666; font-family:monospace; font-size:11px; letter-spacing:1px;
+    }
+    #book-fs-close {
+      margin-left:auto; border:none; background:none;
+      color:#aaa; font-family:monospace; font-size:15px; cursor:pointer;
+    }
+    #book-fs-close:hover { color:#fff; }
+
+    #book-fs-stage {
+      position:relative;
+      flex:1;
+      overflow:hidden;
+    }
+
+    .book-arrow {
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%);
+      z-index:15;
+      width:48px; height:92px;
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:3px;
+      background:rgba(255,255,255,0.035);
+      color:rgba(255,255,255,0.48);
+      font-size:44px; font-weight:200; line-height:92px;
+      text-align:center;
+      cursor:pointer;
+      transition:background .2s, color .2s, border-color .2s;
+    }
+    .book-arrow:hover {
+      color:#fff; background:rgba(255,255,255,0.10);
+      border-color:rgba(255,255,255,0.18);
+    }
+    #book-arr-left  { left:14px; }
+    #book-arr-right { right:14px; }
+
+    @keyframes panelIn {
+      from { transform:scale(.85) translateY(20px); opacity:0; }
+      to   { transform:scale(1) translateY(0); opacity:1; }
+    }
+
+    @media (max-width:700px) {
+      #panel-header { padding:30px 26px 0; }
+      #panel-scroll  { padding:0 26px 28px; }
+      #panel-title   { font-size:22px; }
+      .book-arrow    { width:38px; height:74px; font-size:36px; line-height:74px; }
+      #book-arr-left  { left:4px; }
+      #book-arr-right { right:4px; }
+      #book-fs-hint  { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="pool" id="pool"></div>
+
+  <div id="panel-overlay">
+    <div id="panel-box">
+      <button id="panel-close">✕</button>
+      <div id="panel-header">
+        <div id="panel-sub"></div>
+        <div id="panel-title"></div>
+      </div>
+      <div id="panel-scroll">
+
+        <div id="panel-image-wrap">
+          <img id="panel-image" src="" alt="">
+        </div>
+
+        <div id="panel-video-wrap">
+          <video id="panel-video" controls loop>
+            <source id="panel-video-src" src="" type="video/mp4">
+          </video>
+        </div>
+
+        <div id="panel-book-wrap">
+          <div id="panel-book-toolbar">
+            <span id="panel-book-status">caricamento...</span>
+            <div id="panel-book-actions">
+              <button class="book-mini-btn" id="book-fullscreen-btn">⤢ schermo intero</button>
+            </div>
+          </div>
+          <div id="panel-book-stage">
+            <div id="panel-book"></div>
+          </div>
+        </div>
+
+        <div id="panel-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="book-fullscreen-overlay">
+    <div id="book-fs-toolbar">
+      <span id="book-fs-info"></span>
+      <span id="book-fs-hint">← → per girare pagina · ESC per chiudere</span>
+      <button id="book-fs-close">✕ chiudi</button>
+    </div>
+    <div id="book-fs-stage">
+      <button class="book-arrow" id="book-arr-left">‹</button>
+      <div id="fs-book"></div>
+      <button class="book-arrow" id="book-arr-right">›</button>
+    </div>
+  </div>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/3/turn.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.ripples/0.5.3/jquery.ripples.min.js"></script>
+  <script>
+  const TESI_FOLDER    = './tesi-pages';
+  const TESI_PREFIX    = 'tesi_';
+  const TESI_EXT       = '.webp';
+  const MAX_PAGES      = 600;
+  const BATCH          = 16;
+
+  let tesiPages = [];
+  let tesiPromise = null;
+  let tesiAspect = null;
+  let panelBookReady = false;
+  let fsBookReady    = false;
+
+  function pageUrl(n) {
+   return `${TESI_FOLDER}/${TESI_PREFIX}${n}${TESI_EXT}`;
+  }
+
+  async function urlExists(url) {
+    return new Promise(resolve => {
+      const img = new Image();
+      let settled = false;
+      const finish = ok => { if (settled) return; settled = true; resolve(ok); };
+      img.onload  = () => finish(true);
+      img.onerror = () => finish(false);
+      img.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+      setTimeout(() => finish(false), 8000);
+    });
+  }
+
+  async function discoverPages() {
+    if (tesiPages.length) return tesiPages;
+    if (tesiPromise) return tesiPromise;
+    tesiPromise = (async () => {
+      const found = [];
+      for (let start = 1; start <= MAX_PAGES; start += BATCH) {
+        const idxs = Array.from({length:BATCH}, (_,i) => start+i).filter(n => n<=MAX_PAGES);
+        const res  = await Promise.all(idxs.map(async n => ({n, ok: await urlExists(pageUrl(n))})));
+        const cut  = res.findIndex(r => !r.ok);
+        const good = cut === -1 ? res : res.slice(0, cut);
+        good.forEach(r => found.push(pageUrl(r.n)));
+        if (cut !== -1) break;
+      }
+      tesiPages = found;
+      return tesiPages;
+    })();
+    return tesiPromise;
+  }
+
+  function destroyBook(id) {
+    const $b = $('#'+id);
+    if ($b.data('turn')) try { $b.turn('destroy'); } catch {}
+    document.getElementById(id).innerHTML = '';
+  }
+
+  function buildBook(id, pages, pageW, pageH) {
+    destroyBook(id);
+    const el = document.getElementById(id);
+    el.style.width  = pageW*2 + 'px';
+    el.style.height = pageH   + 'px';
+    pages.forEach((src, i) => {
+      const div = document.createElement('div');
+      div.className = 'page';
+      div.style.cssText = `width:${pageW}px;height:${pageH}px;`;
+      const img = document.createElement('img');
+      img.className = 'book-page-img';
+      img.src = src;
+      img.loading = i < 4 ? 'eager' : 'lazy';
+      img.decoding = 'async';
+      img.alt = 'pagina ' + (i+1);
+      div.appendChild(img);
+      el.appendChild(div);
+    });
+    $('#'+id).turn({
+      width:    pageW*2,
+      height:   pageH,
+      autoCenter: true,
+      gradients:  true,
+      acceleration: true,
+      display:  'double',
+      duration: 600,
+    });
+  }
+
+  async function getTesiAspect() {
+    if (tesiAspect) return tesiAspect;
+    const pages = await discoverPages();
+    if (!pages.length) return 0.651;
+    tesiAspect = await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth / img.naturalHeight);
+      img.onerror = () => resolve(0.651);
+      img.src = pages[0];
+    });
+    return tesiAspect;
+  }
+
+  function panelSize(aspect) {
+    const maxBookW = Math.max(280, Math.min(540, window.innerWidth - 140));
+    const maxBookH = Math.max(240, Math.min(760, window.innerHeight * 0.58));
+    let pageW = Math.floor(maxBookW / 2);
+    let pageH = Math.round(pageW / aspect);
+    if (pageH > maxBookH) { pageH = Math.floor(maxBookH); pageW = Math.round(pageH * aspect); }
+    return { pageW, pageH };
+  }
+
+  function fsSize(aspect) {
+    const maxBookW = Math.max(320, window.innerWidth - 150);
+    const maxBookH = Math.max(300, window.innerHeight - 100);
+    let pageH = maxBookH;
+    let pageW = Math.round(pageH * aspect);
+    if (pageW * 2 > maxBookW) { pageW = Math.floor(maxBookW / 2); pageH = Math.round(pageW / aspect); }
+    return { pageW, pageH };
+  }
+
+  async function ensurePanelBook() {
+    const st = document.getElementById('panel-book-status');
+    st.textContent = 'ricerca immagini...';
+    const pages = await discoverPages();
+    if (!pages.length) { st.textContent = 'immagini non trovate — controlla ./tesi-pages/tesi_1.webp'; return; }
+    const aspect = await getTesiAspect();
+    const { pageW, pageH } = panelSize(aspect);
+    const stage = document.getElementById('panel-book-stage');
+    stage.style.width = (pageW * 2) + 'px';
+    stage.style.height = pageH + 'px';
+    destroyBook('panel-book');
+    panelBookReady = false;
+    buildBook('panel-book', pages, pageW, pageH);
+    panelBookReady = true;
+    st.textContent = pages.length + ' pagine';
+  }
+
+  async function openFullscreen() {
+    const pages = await discoverPages();
+    if (!pages.length) return;
+    const overlay = document.getElementById('book-fullscreen-overlay');
+    overlay.style.display = 'flex';
+    const aspect = await getTesiAspect();
+    const { pageW, pageH } = fsSize(aspect);
+    buildBook('fs-book', pages, pageW, pageH);
+    fsBookReady = true;
+    document.getElementById('book-fs-info').textContent = 'Fake Accelerationism · ' + pages.length + ' pagine';
+  }
+
+  function closeFullscreen() {
+    document.getElementById('book-fullscreen-overlay').style.display = 'none';
+    destroyBook('fs-book');
+    fsBookReady = false;
+  }
+
+  $('#book-fullscreen-btn').on('click', openFullscreen);
+  $('#book-arr-left').on('click',  () => { if (fsBookReady) $('#fs-book').turn('previous'); });
+  $('#book-arr-right').on('click', () => { if (fsBookReady) $('#fs-book').turn('next'); });
+  $('#book-fs-close').on('click',  closeFullscreen);
+
+  document.addEventListener('keydown', e => {
+    if (document.getElementById('book-fullscreen-overlay').style.display !== 'flex') return;
+    if (e.key === 'ArrowRight') { if (fsBookReady) $('#fs-book').turn('next'); }
+    if (e.key === 'ArrowLeft')  { if (fsBookReady) $('#fs-book').turn('previous'); }
+    if (e.key === 'Escape') closeFullscreen();
+  });
+
+  // ── RIPPLES ───────────────────────────────────────────────────
+  $(document).ready(function() {
+    $('#pool').ripples({resolution:512, dropRadius:14, perturbance:0.02, interactive:true, crossOrigin:''});
+  });
+
+  // ── PANEL DATA ────────────────────────────────────────────────
+  const panelData = [
+    {
+      type:'book', title:'Fake Accelerationism', sub:'Tesi Magistrale · 2026',
+      body:`Fake Accelerationism indaga le condizioni che hanno trasformato la sfera pubblica contemporanea in un ecosistema unico nel suo genere — quello della Post-Verità — dove il valore del sapere non risiede più nella sua corrispondenza con la realtà empirica, bensì nella sua capacità di essere virale e generare adesione affettiva.
+
+Attraverso l'analisi di casi quali The Great Moon Hoax, le letture paranoiche delle performance di Marina Abramović e il movimento Birds Aren't Real, lo studio evidenzia come le conspiracy aesthetics siano una tecnologia narrativa capace di operare direttamente sulla produzione della realtà.
+
+La ricerca abbandona la logica della confutazione e sceglie di intervenire dall'interno dei dispositivi del falso, adottando una postura accelerazionista. Attraverso il concetto di iperstizione e la pratica del Montaggio schizoide, il falso non viene confutato ma abitato e spinto verso un deragliamento controllato.
+
+Su queste basi si articola il Teatro dell'Iperstizione, esemplificato dal progetto The Fake Is Present.`
+    },
+    {
+      type:'video', title:'I WANNA BE WITH YOU', sub:'Video Lyrics · Python · 2025',
+      video:'https://pub-3e65835524bc4494bce5830b91cb64df.r2.dev/video.mp4',
+      body:`Il video è stato interamente costruito attraverso codice. Un sistema sviluppato in Python sincronizza ogni singolo frame alla struttura del brano tramite una partitura temporale definita manualmente, alternando coppie di immagini in positivo e negativo con tagli estremamente rapidi, fino a 50 millisecondi.
+
+Progetto fanmade. Tutti i diritti relativi alla musica appartengono a Charli XCX.`
+    },
+    {
+      type:'video', title:'A.S.M.R.', sub:'Ammono Species Memory Retrieval · Installazione Sonora, Terreno Comune, Venezia · 2025',
+      video:'https://pub-3e65835524bc4494bce5830b91cb64df.r2.dev/asmr.mp4',
+      body:`È un'installazione sonora che simula una linea di comunicazione con forme di vita estinte. Un modello di sintesi vocale, addestrato a sussurrare, recita i nomi delle specie di ammoniti conosciute.
+
+Per la realizzazione ho raccolto dai principali database paleontologici un archivio di circa 22.000 nomi di specie di ammoniti, elaborato in Python e convertito in voce mediante librerie TTS (Text to Speech) configurate per una resa sussurrata in stile ASMR. La composizione sonora dura circa dieci ore e mezza.`
+    },
+    {
+      type:'image', title:'Venetian breath play gone wrong aquababe', sub:'about ME',
+      image:'./aboutme.png',
+      body:`Andrea si è laureato in Studi Teatrali e Coreografici presso l'Università Iuav di Venezia con una tesi sulle estetiche del complotto e sulla capacità del falso di produrre realtà. La sua ricerca si muove nell'intersezione tra teoria della performance, linguaggi di internet e cultura della post-verità. Attraverso installazioni, video, scrittura e progetti digitali, indaga il modo in cui immagini, narrazioni e dispositivi tecnologici influenzano la percezione del reale. Il suo lavoro attraversa immaginari online, culture marginali e forme di finzione contemporanea, trattandole come materiali performativi capaci di produrre esperienza, desiderio e credenza.
+
+`
+    },
+  ];
+
+  const panelOverlay = document.getElementById('panel-overlay');
+
+  async function openPanel(idx) {
+    const d = panelData[idx];
+    if (!d) return;
+
+    document.getElementById('panel-title').textContent = d.title;
+    document.getElementById('panel-sub').textContent   = d.sub;
+    document.getElementById('panel-body').textContent  = d.body;
+
+    const iwrap = document.getElementById('panel-image-wrap');
+    const pimg  = document.getElementById('panel-image');
+    const vwrap = document.getElementById('panel-video-wrap');
+    const bwrap = document.getElementById('panel-book-wrap');
+    const vid   = document.getElementById('panel-video');
+
+    vid.pause();
+    iwrap.style.display='none';
+    vwrap.style.display='none';
+    bwrap.style.display='none';
+
+    document.getElementById('panel-scroll').scrollTop = 0;
+    panelOverlay.style.display='flex';
+
+    const box = document.getElementById('panel-box');
+    box.style.animation='none'; box.offsetHeight;
+    box.style.animation='panelIn .3s cubic-bezier(.34,1.56,.64,1)';
+
+    if (d.type === 'image') {
+      pimg.src = d.image;
+      pimg.alt = d.title;
+      iwrap.style.display='block';
+    } else if (d.type === 'video') {
+      document.getElementById('panel-video-src').src = d.video;
+      vid.load();
+      vwrap.style.display='block';
+    } else if (d.type === 'book') {
+      bwrap.style.display='block';
+      await ensurePanelBook();
+    }
+  }
+
+  function closePanel() {
+    document.getElementById('panel-video').pause();
+    panelOverlay.style.display='none';
+  }
+  document.getElementById('panel-close').onclick = closePanel;
+  panelOverlay.addEventListener('click', e => { if(e.target===panelOverlay) closePanel(); });
+
+  // ── DAKI ──────────────────────────────────────────────────────
+  const dakiDefs = [
+    {img:'./daki5g.png',   w:80,  h:220, startX:0.25, startY:0.45, phase:0.0},
+    {img:'./palm.png',     w:100, h:180, startX:0.50, startY:0.30, phase:1.3},
+    {img:'./ammogirl.png', w:85,  h:220, startX:0.70, startY:0.55, phase:2.6},
+    {img:'./me.png',       w:220, h:100, startX:0.50, startY:0.75, phase:3.8},
+  ];
+
+  const dakis = dakiDefs.map(def => {
+    const shadow = document.createElement('div');
+    shadow.className='daki-shadow';
+    shadow.style.width=(def.w-4)+'px'; shadow.style.height=(def.h-6)+'px';
+    document.body.appendChild(shadow);
+    const el = document.createElement('div');
+    el.className='daki';
+    el.style.width=def.w+'px'; el.style.height=def.h+'px';
+    el.style.backgroundImage=`url('${def.img}')`;
+    el.innerHTML='<div class="daki-submersion"></div><div class="daki-reflection"></div><div class="daki-wave-overlay"></div>';
+    document.body.appendChild(el);
+    return {
+      el, shadow,
+      reflection:el.querySelector('.daki-reflection'),
+      submersion:el.querySelector('.daki-submersion'),
+      waveOverlay:el.querySelector('.daki-wave-overlay'),
+      w:def.w, h:def.h,
+      x:def.startX*innerWidth, y:def.startY*innerHeight,
+      vx:0,vy:0, rotZ:0,rotX:0,heightBob:0,
+      sinkZ:0,sinkX:0, dragging:false,
+      dragOX:0,dragOY:0,lastDX:0,lastDY:0,
+      touchNX:0,touchNZ:0, hoverIntensity:0,
+      phase:def.phase, mdX:0,mdY:0,
+    };
+  });
+
+  function getWaveAt(px,py){
+    try{
+      const rc=document.querySelector('.pool canvas');
+      if(!rc) return{h:0,gx:0,gy:0};
+      const gl=rc.getContext('webgl')||rc.getContext('experimental-webgl');
+      if(!gl) return{h:0,gx:0,gy:0};
+      const sx=Math.floor((px/innerWidth)*rc.width);
+      const sy=Math.floor((py/innerHeight)*rc.height);
+      const p=new Uint8Array(4),pR=new Uint8Array(4),pD=new Uint8Array(4);
+      gl.readPixels(sx,  rc.height-sy,  1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);
+      gl.readPixels(sx+4,rc.height-sy,  1,1,gl.RGBA,gl.UNSIGNED_BYTE,pR);
+      gl.readPixels(sx,  rc.height-sy+4,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pD);
+      const h=(p[0]/255)*2-1;
+      return{h,gx:(pR[0]/255)*2-1-h,gy:(pD[0]/255)*2-1-h};
+    }catch{return{h:0,gx:0,gy:0};}
+  }
+
+  function isOnDaki(d,px,py){
+    const dx=px-d.x,dy=py-d.y;
+    const rad=-d.rotZ*Math.PI/180;
+    const lx=dx*Math.cos(rad)-dy*Math.sin(rad);
+    const ly=dx*Math.sin(rad)+dy*Math.cos(rad);
+    return Math.abs(lx)<d.w/2&&Math.abs(ly)<d.h/2;
+  }
+
+  document.addEventListener('mousedown',e=>{
+    for(let i=dakis.length-1;i>=0;i--){
+      const d=dakis[i];
+      if(!isOnDaki(d,e.clientX,e.clientY)) continue;
+      d.dragging=true;
+      d.dragOX=e.clientX-d.x; d.dragOY=e.clientY-d.y;
+      d.lastDX=0; d.lastDY=0;
+      d.touchNX=(e.clientX-d.x)/(d.w/2);
+      d.touchNZ=(e.clientY-d.y)/(d.h/2);
+      d.mdX=e.clientX; d.mdY=e.clientY;
+      $('#pool').ripples('drop',e.clientX,e.clientY,30,0.08);
+      e.preventDefault(); break;
+    }
+  });
+
+  document.addEventListener('mousemove',e=>{
+    $('#pool').ripples('drop',e.clientX,e.clientY,18,0.025);
+    dakis.forEach(d=>{
+      if(d.dragging){
+        d.lastDX=(e.clientX-d.dragOX)-d.x;
+        d.lastDY=(e.clientY-d.dragOY)-d.y;
+        d.x=e.clientX-d.dragOX; d.y=e.clientY-d.dragOY;
+        $('#pool').ripples('drop',e.clientX,e.clientY,40,0.08);
+      } else if(isOnDaki(d,e.clientX,e.clientY)){
+        $('#pool').ripples('drop',e.clientX,e.clientY,12,0.04);
+        const rx=((e.clientX-(d.x-d.w/2))/d.w*100).toFixed(1);
+        const ry=((e.clientY-(d.y-d.h/2))/d.h*100).toFixed(1);
+        d.waveOverlay.style.background=`radial-gradient(circle at ${rx}% ${ry}%,rgba(255,255,255,0.18) 0%,rgba(100,200,255,0.08) 40%,transparent 70%)`;
+        d.hoverIntensity=Math.min(d.hoverIntensity+0.08,1);
+      } else {
+        d.hoverIntensity=Math.max(d.hoverIntensity-0.05,0);
+      }
+    });
+  });
+
+  document.addEventListener('mouseup',e=>{
+    dakis.forEach((d,idx)=>{
+      if(!d.dragging) return;
+      const dist=Math.hypot(e.clientX-d.mdX,e.clientY-d.mdY);
+      if(dist<8) openPanel(idx);
+      else{ d.vx=d.lastDX*0.7; d.vy=d.lastDY*0.7; }
+      d.dragging=false; d.touchNX=0; d.touchNZ=0;
+    });
+  });
+
+  let t=0;
+  function loop(){
+    requestAnimationFrame(loop);
+    t+=0.016;
+    dakis.forEach(d=>{
+      if(!d.dragging){
+        const mv=15;
+        d.vx=Math.max(-mv,Math.min(mv,d.vx));
+        d.vy=Math.max(-mv,Math.min(mv,d.vy));
+        d.x+=d.vx; d.y+=d.vy;
+        d.vx*=0.97; d.vy*=0.97;
+        if(d.x<d.w/2){d.x=d.w/2;d.vx*=-0.5;}
+        if(d.x>innerWidth-d.w/2){d.x=innerWidth-d.w/2;d.vx*=-0.5;}
+        if(d.y<d.h/2){d.y=d.h/2;d.vy*=-0.5;}
+        if(d.y>innerHeight-d.h/2){d.y=innerHeight-d.h/2;d.vy*=-0.5;}
+        d.sinkZ+=(0-d.sinkZ)*0.05; d.sinkX+=(0-d.sinkX)*0.05;
+        const ph=d.phase;
+        d.vx+=Math.sin(t*0.3+ph)*0.012+Math.sin(t*0.17+ph+1.2)*0.006;
+        d.vy+=Math.cos(t*0.25+ph+0.8)*0.008+Math.cos(t*0.13+ph+2.1)*0.004;
+        const w=getWaveAt(d.x,d.y);
+        d.vx+=w.gx*1.1; d.vy+=w.gy*1.1;
+        if(Math.random()<0.04) $('#pool').ripples('drop',d.x+(Math.random()-.5)*60,d.y+(Math.random()-.5)*120,12,0.012);
+        if(Math.hypot(d.vx,d.vy)>0.3) $('#pool').ripples('drop',d.x,d.y,20,Math.min(Math.hypot(d.vx,d.vy)*0.012,0.06));
+      } else {
+        d.sinkZ+=(d.touchNX*16-d.sinkZ)*0.14;
+        d.sinkX+=(d.touchNZ*12-d.sinkX)*0.14;
+        $('#pool').ripples('drop',d.x,d.y,35,0.07);
+        $('#pool').ripples('drop',d.x+30,d.y,14,0.04);
+        $('#pool').ripples('drop',d.x-30,d.y,14,0.04);
+        $('#pool').ripples('drop',d.x,d.y+d.h*.4,14,0.04);
+        $('#pool').ripples('drop',d.x,d.y-d.h*.4,14,0.04);
+      }
+    });
+
+    for(let it=0;it<10;it++){
+      for(let i=0;i<dakis.length;i++){
+        for(let j=i+1;j<dakis.length;j++){
+          const a=dakis[i],b=dakis[j];
+          const dx=b.x-a.x,dy=b.y-a.y;
+          const ox=(a.w/2+b.w/2)-Math.abs(dx);
+          const oy=(a.h/2+b.h/2)-Math.abs(dy);
+          if(ox<=0||oy<=0) continue;
+          if(ox<oy){
+            const s=dx>=0?1:-1;
+            a.x-=s*ox*0.5; b.x+=s*ox*0.5;
+            if(it===0){const r=(a.vx-b.vx)*s;if(r>0){a.vx-=r*s*0.6;b.vx+=r*s*0.6;}
+              $('#pool').ripples('drop',(a.x+b.x)/2,(a.y+b.y)/2,28,0.06);}
+          } else {
+            const s=dy>=0?1:-1;
+            a.y-=s*oy*0.5; b.y+=s*oy*0.5;
+            if(it===0){const r=(a.vy-b.vy)*s;if(r>0){a.vy-=r*s*0.6;b.vy+=r*s*0.6;}
+              $('#pool').ripples('drop',(a.x+b.x)/2,(a.y+b.y)/2,28,0.06);}
+          }
+        }
+      }
+    }
+
+    dakis.forEach(d=>{
+      const w=getWaveAt(d.x,d.y);
+      const bs=1+w.h*0.04;
+      const tRZ=w.gx*28+Math.sin(t*0.8+d.phase)*2-d.sinkZ;
+      const tRX=w.gy*20+Math.sin(t*0.6+d.phase+1)*1.5+d.sinkX;
+      d.rotZ+=(tRZ-d.rotZ)*0.18; d.rotX+=(tRX-d.rotX)*0.16;
+      const tb=w.h*8+Math.sin(t*1.1+d.phase)*1.8;
+      d.heightBob+=(tb-d.heightBob)*0.12;
+      d.el.style.left=(d.x-d.w/2)+'px';
+      d.el.style.top=(d.y-d.h/2)+'px';
+      d.el.style.transform=`perspective(1000px) rotateZ(${d.rotZ}deg) rotateX(${d.rotX}deg) translateY(${d.heightBob}px) scale(${bs})`;
+      d.el.style.filter=`brightness(${100+d.heightBob*0.4}%) contrast(${100-d.heightBob*0.1}%)`;
+      d.waveOverlay.style.opacity=d.hoverIntensity;
+      d.reflection.style.backgroundPosition=`${Math.sin(t*0.4+d.phase)*20+d.x*0.05}px ${Math.cos(t*0.3+d.phase)*20+d.y*0.05}px`;
+      d.submersion.style.opacity=Math.min(0.45,0.06+Math.hypot(d.vx,d.vy)*0.02+(d.dragging?0.14:0));
+      d.shadow.style.left=(d.x-d.shadow.offsetWidth/2+d.rotZ*1.1)+'px';
+      d.shadow.style.top=(d.y-d.shadow.offsetHeight/2+16)+'px';
+      d.shadow.style.filter=`blur(${Math.max(5,11-d.heightBob*0.4)}px)`;
+      d.shadow.style.opacity='0.42';
+    });
+  }
+  loop();
+  </script>
+</body>
+</html>
