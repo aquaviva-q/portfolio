@@ -2,12 +2,15 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>aquavivaportfolio</title>
   <link rel="icon" type="image/png" href="./brain.png">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    html, body { width:100%; height:100%; overflow:hidden; background:#020813; }
+    html, body {
+      width:100%; height:100%; overflow:hidden; background:#020813;
+      touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    }
 
     .pool {
       position:fixed; inset:0;
@@ -17,7 +20,7 @@
     }
 
     .daki {
-      position:fixed; z-index:10; cursor:grab;
+      position:fixed; z-index:10; cursor:grab; touch-action:none;
       transform-origin:center center; border-radius:18px;
       box-shadow:inset 0 4px 12px rgba(255,255,255,0.7), inset 0 -6px 14px rgba(0,40,110,0.18);
       border:1px solid rgba(255,255,255,0.35);
@@ -48,6 +51,17 @@
       filter:blur(14px); z-index:9; pointer-events:none; mix-blend-mode:multiply;
     }
 
+    /* ── SALVAGENTE: anello con foro trasparente (si vede l'acqua) ── */
+    .daki.buoy { border-radius:50%; border:none; box-shadow:none; overflow:visible; }
+    .daki.buoy::before { display:none; }
+    .daki.buoy .daki-wave-overlay { border-radius:50%; }
+    .buoy-cv { position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
+    .daki.buoy, .daki-shadow.ring {
+      -webkit-mask:radial-gradient(circle closest-side, transparent 0 44%, #000 45%);
+              mask:radial-gradient(circle closest-side, transparent 0 44%, #000 45%);
+    }
+    .daki-shadow.ring { border-radius:50%; }
+
     /* ── PANEL ── */
     #panel-overlay {
       display:none; position:fixed; inset:0; z-index:100;
@@ -77,7 +91,7 @@
       font-size:26px; font-weight:bold; letter-spacing:1px;
     }
     #panel-scroll {
-      flex:1; overflow-y:auto; padding:0 48px 36px;
+      flex:1; overflow-y:auto; padding:0 48px 36px; touch-action:pan-y;
       scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.15) transparent;
     }
     #panel-scroll::-webkit-scrollbar { width:4px; }
@@ -103,7 +117,9 @@
       color:#777; font-family:monospace; font-size:11px; cursor:pointer;
     }
     .book-mini-btn:hover { color:#fff; background:rgba(255,255,255,0.10); }
-    
+    #panel-book-note { display:none; margin-top:10px; color:#555; font-family:monospace; font-size:10px; letter-spacing:1px; text-align:center; }
+    html[lang="en"] #panel-book-note { display:block; }
+
     #panel-book-stage {
       position:relative;
       overflow:hidden;
@@ -136,6 +152,15 @@
       color:#888; font-family:monospace; font-size:13px;
       line-height:2; white-space:pre-line;
     }
+
+    /* contatti (solo about me) */
+    #panel-contact { display:none; margin-top:28px; padding-top:20px; border-top:1px solid rgba(255,255,255,0.08); }
+    #panel-contact-label {
+      margin-bottom:8px; color:#444; font-family:monospace;
+      font-size:9px; letter-spacing:5px; text-transform:uppercase;
+    }
+    #panel-mail { color:#8fd8ff; font-family:monospace; font-size:13px; text-decoration:none; }
+    #panel-mail:hover { color:#fff; }
 
     /* ── FULLSCREEN BOOK ── */
     #book-fullscreen-overlay {
@@ -217,24 +242,30 @@
         </div>
 
         <div id="panel-video-wrap">
-          <video id="panel-video" controls loop>
+          <video id="panel-video" controls loop playsinline>
             <source id="panel-video-src" src="" type="video/mp4">
           </video>
         </div>
 
         <div id="panel-book-wrap">
           <div id="panel-book-toolbar">
-            <span id="panel-book-status">caricamento...</span>
+            <span id="panel-book-status" data-i18n="loading">caricamento...</span>
             <div id="panel-book-actions">
-              <button class="book-mini-btn" id="book-fullscreen-btn">⤢ schermo intero</button>
+              <button class="book-mini-btn" id="book-fullscreen-btn" data-i18n="fullscreen">⤢ schermo intero</button>
             </div>
           </div>
           <div id="panel-book-stage">
             <div id="panel-book"></div>
           </div>
+          <div id="panel-book-note" data-i18n="bookNote"></div>
         </div>
 
         <div id="panel-body"></div>
+
+        <div id="panel-contact">
+          <div id="panel-contact-label" data-i18n="contacts">Contatti</div>
+          <a id="panel-mail" href="#"></a>
+        </div>
       </div>
     </div>
   </div>
@@ -242,8 +273,8 @@
   <div id="book-fullscreen-overlay">
     <div id="book-fs-toolbar">
       <span id="book-fs-info"></span>
-      <span id="book-fs-hint">← → per girare pagina · ESC per chiudere</span>
-      <button id="book-fs-close">✕ chiudi</button>
+      <span id="book-fs-hint" data-i18n="hint">← → per girare pagina · ESC per chiudere</span>
+      <button id="book-fs-close" data-i18n="close">✕ chiudi</button>
     </div>
     <div id="book-fs-stage">
       <button class="book-arrow" id="book-arr-left">‹</button>
@@ -263,11 +294,32 @@
   const MAX_PAGES      = 600;
   const BATCH          = 16;
 
+  // email composta via JS (meno raccolta da bot)
+  const EMAIL = ['andreaptq', 'protonmail.com'].join('@');
+
   let tesiPages = [];
   let tesiPromise = null;
   let tesiAspect = null;
   let panelBookReady = false;
   let fsBookReady    = false;
+
+  // ── LINGUA ────────────────────────────────────────────────────
+  let lang = 'it';
+  try { if (localStorage.getItem('lang') === 'en') lang = 'en'; } catch {}
+  let currentPanel = null;
+
+  const UI = {
+    it: { loading:'caricamento...', searching:'ricerca immagini...', fullscreen:'⤢ schermo intero',
+          pages:'pagine', hint:'← → per girare pagina · ESC per chiudere', close:'✕ chiudi',
+          contacts:'Contatti', bookNote:'',
+          notFound:'immagini non trovate — controlla ./tesi-pages/tesi_1.webp' },
+    en: { loading:'loading...', searching:'looking for images...', fullscreen:'⤢ fullscreen',
+          pages:'pages', hint:'← → to turn page · ESC to close', close:'✕ close',
+          contacts:'Contacts', bookNote:'The thesis pages are in Italian.',
+          notFound:'images not found — check ./tesi-pages/tesi_1.webp' },
+  };
+  const ui  = k => UI[lang][k];
+  const txt = (d, f) => (lang === 'en' && d.en && d.en[f]) || d[f];
 
   function pageUrl(n) {
    return `${TESI_FOLDER}/${TESI_PREFIX}${n}${TESI_EXT}`;
@@ -372,9 +424,9 @@
 
   async function ensurePanelBook() {
     const st = document.getElementById('panel-book-status');
-    st.textContent = 'ricerca immagini...';
+    st.textContent = ui('searching');
     const pages = await discoverPages();
-    if (!pages.length) { st.textContent = 'immagini non trovate — controlla ./tesi-pages/tesi_1.webp'; return; }
+    if (!pages.length) { st.textContent = ui('notFound'); return; }
     const aspect = await getTesiAspect();
     const { pageW, pageH } = panelSize(aspect);
     const stage = document.getElementById('panel-book-stage');
@@ -384,7 +436,7 @@
     panelBookReady = false;
     buildBook('panel-book', pages, pageW, pageH);
     panelBookReady = true;
-    st.textContent = pages.length + ' pagine';
+    st.textContent = pages.length + ' ' + ui('pages');
   }
 
   async function openFullscreen() {
@@ -396,7 +448,7 @@
     const { pageW, pageH } = fsSize(aspect);
     buildBook('fs-book', pages, pageW, pageH);
     fsBookReady = true;
-    document.getElementById('book-fs-info').textContent = 'Fake Accelerationism · ' + pages.length + ' pagine';
+    document.getElementById('book-fs-info').textContent = 'Fake Accelerationism · ' + pages.length + ' ' + ui('pages');
   }
 
   function closeFullscreen() {
@@ -432,40 +484,77 @@ Attraverso l'analisi di casi quali The Great Moon Hoax, le letture paranoiche de
 
 La ricerca abbandona la logica della confutazione e sceglie di intervenire dall'interno dei dispositivi del falso, adottando una postura accelerazionista. Attraverso il concetto di iperstizione e la pratica del Montaggio schizoide, il falso non viene confutato ma abitato e spinto verso un deragliamento controllato.
 
-Su queste basi si articola il Teatro dell'Iperstizione, esemplificato dal progetto The Fake Is Present.`
+Su queste basi si articola il Teatro dell'Iperstizione, esemplificato dal progetto The Fake Is Present.`,
+      en:{
+        sub:'Master\'s Thesis · 2026',
+        body:`Fake Accelerationism investigates the conditions that turned the contemporary public sphere into a unique ecosystem — that of Post-Truth — where the value of knowledge no longer lies in its correspondence with empirical reality, but in its capacity to go viral and generate affective adhesion.
+
+Through the analysis of cases such as The Great Moon Hoax, the paranoid readings of Marina Abramović's performances and the Birds Aren't Real movement, the study shows how conspiracy aesthetics are a narrative technology able to operate directly on the production of reality.
+
+The research abandons the logic of refutation and chooses to intervene from within the apparatuses of the fake, adopting an accelerationist stance. Through the concept of hyperstition and the practice of Schizoid Montage, the fake is not refuted but inhabited and pushed toward a controlled derailment.
+
+On these foundations the Theatre of Hyperstition takes shape, exemplified by the project The Fake Is Present.`
+      }
     },
     {
       type:'video', title:'I WANNA BE WITH YOU', sub:'Video Lyrics · Python · 2025',
       video:'https://pub-3e65835524bc4494bce5830b91cb64df.r2.dev/video.mp4',
       body:`Il video è stato interamente costruito attraverso codice. Un sistema sviluppato in Python sincronizza ogni singolo frame alla struttura del brano tramite una partitura temporale definita manualmente, alternando coppie di immagini in positivo e negativo con tagli estremamente rapidi, fino a 50 millisecondi.
 
-Progetto fanmade. Tutti i diritti relativi alla musica appartengono a Charli XCX.`
+Progetto fanmade. Tutti i diritti relativi alla musica appartengono a Charli XCX.`,
+      en:{
+        sub:'Lyric Video · Python · 2025',
+        body:`The video was built entirely through code. A system developed in Python syncs every single frame to the structure of the song through a manually defined timing score, alternating pairs of positive and negative images with extremely fast cuts, down to 50 milliseconds.
+
+Fan-made project. All rights to the music belong to Charli XCX.`
+      }
     },
     {
       type:'video', title:'A.S.M.R.', sub:'Ammono Species Memory Retrieval · Installazione Sonora, Terreno Comune, Venezia · 2025',
       video:'https://pub-3e65835524bc4494bce5830b91cb64df.r2.dev/asmr.mp4',
       body:`È un'installazione sonora che simula una linea di comunicazione con forme di vita estinte. Un modello di sintesi vocale, addestrato a sussurrare, recita i nomi delle specie di ammoniti conosciute.
 
-Per la realizzazione ho raccolto dai principali database paleontologici un archivio di circa 22.000 nomi di specie di ammoniti, elaborato in Python e convertito in voce mediante librerie TTS (Text to Speech) configurate per una resa sussurrata in stile ASMR. La composizione sonora dura circa dieci ore e mezza.`
+Per la realizzazione ho raccolto dai principali database paleontologici un archivio di circa 22.000 nomi di specie di ammoniti, elaborato in Python e convertito in voce mediante librerie TTS (Text to Speech) configurate per una resa sussurrata in stile ASMR. La composizione sonora dura circa dieci ore e mezza.`,
+      en:{
+        sub:'Ammono Species Memory Retrieval · Sound Installation, Terreno Comune, Venice · 2025',
+        body:`A sound installation that simulates a line of communication with extinct life forms. A speech synthesis model, trained to whisper, recites the names of known ammonite species.
+
+For the piece I gathered an archive of about 22,000 ammonite species names from the main paleontological databases, processed it in Python and converted it to voice using TTS (Text to Speech) libraries configured for a whispered, ASMR-style delivery. The sound composition lasts about ten and a half hours.`
+      }
     },
     {
-      type:'image', title:'Venetian breath play gone wrong aquababe', sub:'about ME',
+      type:'image', title:'Venetian breath play gone wrong aquababe', sub:'about ME', contact:true,
       image:'./aboutme.png',
-      body:`Andrea si è laureato in Studi Teatrali e Coreografici presso l'Università Iuav di Venezia con una tesi sulle estetiche del complotto e sulla capacità del falso di produrre realtà. La sua ricerca si muove nell'intersezione tra teoria della performance, linguaggi di internet e cultura della post-verità. Attraverso installazioni, video, scrittura e progetti digitali, indaga il modo in cui immagini, narrazioni e dispositivi tecnologici influenzano la percezione del reale. Il suo lavoro attraversa immaginari online, culture marginali e forme di finzione contemporanea, trattandole come materiali performativi capaci di produrre esperienza, desiderio e credenza.
-
-`
+      body:`Andrea si è laureato in Studi Teatrali e Coreografici presso l'Università Iuav di Venezia con una tesi sulle estetiche del complotto e sulla capacità del falso di produrre realtà. La sua ricerca si muove nell'intersezione tra teoria della performance, linguaggi di internet e cultura della post-verità. Attraverso installazioni, video, scrittura e progetti digitali, indaga il modo in cui immagini, narrazioni e dispositivi tecnologici influenzano la percezione del reale. Il suo lavoro attraversa immaginari online, culture marginali e forme di finzione contemporanea, trattandole come materiali performativi capaci di produrre esperienza, desiderio e credenza.`,
+      en:{
+        body:`Andrea graduated in Theatre and Choreographic Studies from the Iuav University of Venice with a thesis on conspiracy aesthetics and the capacity of the fake to produce reality. His research moves across the intersection of performance theory, internet languages and post-truth culture. Through installations, videos, writing and digital projects, he investigates how images, narratives and technological devices shape the perception of the real. His work moves through online imaginaries, marginal cultures and forms of contemporary fiction, treating them as performative materials capable of producing experience, desire and belief.`
+      }
     },
   ];
 
   const panelOverlay = document.getElementById('panel-overlay');
 
+  function renderPanelText(idx) {
+    const d = panelData[idx];
+    document.getElementById('panel-title').textContent = txt(d, 'title');
+    document.getElementById('panel-sub').textContent   = txt(d, 'sub');
+    document.getElementById('panel-body').textContent  = txt(d, 'body');
+  }
+
   async function openPanel(idx) {
     const d = panelData[idx];
     if (!d) return;
 
-    document.getElementById('panel-title').textContent = d.title;
-    document.getElementById('panel-sub').textContent   = d.sub;
-    document.getElementById('panel-body').textContent  = d.body;
+    currentPanel = idx;
+    renderPanelText(idx);
+
+    const contact = document.getElementById('panel-contact');
+    contact.style.display = d.contact ? 'block' : 'none';
+    if (d.contact) {
+      const mail = document.getElementById('panel-mail');
+      mail.href = 'mailto:' + EMAIL;
+      mail.textContent = EMAIL;
+    }
 
     const iwrap = document.getElementById('panel-image-wrap');
     const pimg  = document.getElementById('panel-image');
@@ -502,43 +591,109 @@ Per la realizzazione ho raccolto dai principali database paleontologici un archi
   function closePanel() {
     document.getElementById('panel-video').pause();
     panelOverlay.style.display='none';
+    currentPanel = null;
   }
   document.getElementById('panel-close').onclick = closePanel;
   panelOverlay.addEventListener('click', e => { if(e.target===panelOverlay) closePanel(); });
 
-  // ── DAKI ──────────────────────────────────────────────────────
+  // ── DAKI + SALVAGENTE ─────────────────────────────────────────
   const dakiDefs = [
     {img:'./daki5g.png',   w:80,  h:220, startX:0.25, startY:0.45, phase:0.0},
     {img:'./palm.png',     w:100, h:180, startX:0.50, startY:0.30, phase:1.3},
     {img:'./ammogirl.png', w:85,  h:220, startX:0.70, startY:0.55, phase:2.6},
     {img:'./me.png',       w:220, h:100, startX:0.50, startY:0.75, phase:3.8},
+    {round:true,             w:116, h:116, startX:0.80, startY:0.25, phase:5.1}, // salvagente: toggle lingua
   ];
 
   const dakis = dakiDefs.map(def => {
     const shadow = document.createElement('div');
-    shadow.className='daki-shadow';
+    shadow.className='daki-shadow' + (def.round ? ' ring' : '');
     shadow.style.width=(def.w-4)+'px'; shadow.style.height=(def.h-6)+'px';
     document.body.appendChild(shadow);
     const el = document.createElement('div');
-    el.className='daki';
+    el.className='daki' + (def.round ? ' buoy' : '');
     el.style.width=def.w+'px'; el.style.height=def.h+'px';
-    el.style.backgroundImage=`url('${def.img}')`;
-    el.innerHTML='<div class="daki-submersion"></div><div class="daki-reflection"></div><div class="daki-wave-overlay"></div>';
+    if (!def.round) el.style.backgroundImage=`url('${def.img}')`;
+    el.innerHTML=(def.round ? '<canvas class="buoy-cv" width="232" height="232"></canvas>' : '')
+      + '<div class="daki-submersion"></div><div class="daki-reflection"></div><div class="daki-wave-overlay"></div>';
     document.body.appendChild(el);
     return {
-      el, shadow,
+      el, shadow, round:!!def.round, cv:el.querySelector('.buoy-cv'),
       reflection:el.querySelector('.daki-reflection'),
       submersion:el.querySelector('.daki-submersion'),
       waveOverlay:el.querySelector('.daki-wave-overlay'),
       w:def.w, h:def.h,
       x:def.startX*innerWidth, y:def.startY*innerHeight,
       vx:0,vy:0, rotZ:0,rotX:0,heightBob:0,
-      sinkZ:0,sinkX:0, dragging:false,
+      sinkZ:0,sinkX:0, dragging:false, pid:null, touch:false,
       dragOX:0,dragOY:0,lastDX:0,lastDY:0,
       touchNX:0,touchNZ:0, hoverIntensity:0,
       phase:def.phase, mdX:0,mdY:0,
+      wave:{h:0,gx:0,gy:0}, spin:0, spinAng:0, pending:false,
     };
   });
+  const buoy = dakis.find(d => d.round);
+
+  // texture bandiera → anello con volume (luci, ombre, corda)
+  function flagTexture(code, S) {
+    const c = document.createElement('canvas'); c.width = c.height = S;
+    const g = c.getContext('2d');
+    if (code === 'it') {
+      ['#009246', '#f4f5f0', '#ce2b37'].forEach((col, i) => { g.fillStyle = col; g.fillRect(i * S / 3, 0, S / 3 + 1, S); });
+    } else {
+      g.fillStyle = '#012169'; g.fillRect(0, 0, S, S);
+      const ln = (a, b, c2, d2, col, w) => { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(a, b); g.lineTo(c2, d2); g.stroke(); };
+      ln(0,0,S,S,'#fff',S*.2);  ln(S,0,0,S,'#fff',S*.2);
+      ln(0,0,S,S,'#C8102E',S*.07); ln(S,0,0,S,'#C8102E',S*.07);
+      ln(S/2,0,S/2,S,'#fff',S*.33); ln(0,S/2,S,S/2,'#fff',S*.33);
+      ln(S/2,0,S/2,S,'#C8102E',S*.2); ln(0,S/2,S,S/2,'#C8102E',S*.2);
+    }
+    return c;
+  }
+  const buoyTex = {};
+  function drawBuoy(code) {
+    if (!buoy) return;
+    const cv = buoy.cv, g = cv.getContext('2d'), S = cv.width, R = S / 2;
+    buoyTex[code] = buoyTex[code] || flagTexture(code, S);
+    g.clearRect(0, 0, S, S);
+    g.drawImage(buoyTex[code], 0, 0);
+    // sezione del tubo: scuro ai bordi, luce al centro
+    let gr = g.createRadialGradient(R, R, R * .45, R, R, R);
+    [[0,'rgba(0,10,40,.6)'],[.2,'rgba(0,10,40,0)'],[.5,'rgba(255,255,255,.3)'],[.8,'rgba(0,10,40,0)'],[1,'rgba(0,10,40,.55)']]
+      .forEach(([s, c]) => gr.addColorStop(s, c));
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    // riflesso in alto a sinistra
+    gr = g.createRadialGradient(S*.32, S*.26, 0, S*.32, S*.26, S*.4);
+    gr.addColorStop(0, 'rgba(255,255,255,.38)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    // corda perimetrale
+    g.strokeStyle = 'rgba(236,226,196,.9)'; g.lineWidth = S * .018; g.setLineDash([S * .03, S * .015]);
+    g.beginPath(); g.arc(R, R, R * .93, 0, 7); g.stroke(); g.setLineDash([]);
+  }
+
+  // il salvagente mostra la bandiera della lingua verso cui si passa
+  const buoyCode = () => lang === 'it' ? 'en' : 'it';
+
+  function applyLang(skipBuoy) {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = ui(el.dataset.i18n));
+    if (currentPanel !== null) renderPanelText(currentPanel);
+    if (panelBookReady) document.getElementById('panel-book-status').textContent = tesiPages.length + ' ' + ui('pages');
+    if (fsBookReady)    document.getElementById('book-fs-info').textContent = 'Fake Accelerationism · ' + tesiPages.length + ' ' + ui('pages');
+    if (!skipBuoy) drawBuoy(buoyCode());
+  }
+
+  function toggleLang() {
+    lang = lang === 'it' ? 'en' : 'it';
+    try { localStorage.setItem('lang', lang); } catch {}
+    applyLang(true);                 // la texture cambia a metà giro
+    buoy.spin = 0.001; buoy.pending = true;
+    for (let k = 0; k < 6; k++) {
+      const a = k * Math.PI / 3;
+      $('#pool').ripples('drop', buoy.x + Math.cos(a) * 46, buoy.y + Math.sin(a) * 46, 22, 0.07);
+    }
+  }
+  applyLang();
 
   function getWaveAt(px,py){
     try{
@@ -559,17 +714,24 @@ Per la realizzazione ho raccolto dai principali database paleontologici un archi
 
   function isOnDaki(d,px,py){
     const dx=px-d.x,dy=py-d.y;
+    if(d.round) return Math.hypot(dx,dy)<d.w/2;      // tutto il disco è cliccabile
     const rad=-d.rotZ*Math.PI/180;
     const lx=dx*Math.cos(rad)-dy*Math.sin(rad);
     const ly=dx*Math.sin(rad)+dy*Math.cos(rad);
     return Math.abs(lx)<d.w/2&&Math.abs(ly)<d.h/2;
   }
 
-  document.addEventListener('mousedown',e=>{
+  // ── POINTER EVENTS (mouse + touch + penna) ────────────────────
+  const overlayOpen = () =>
+    panelOverlay.style.display==='flex' ||
+    document.getElementById('book-fullscreen-overlay').style.display==='flex';
+
+  document.addEventListener('pointerdown',e=>{
+    if(overlayOpen()) return;
     for(let i=dakis.length-1;i>=0;i--){
       const d=dakis[i];
       if(!isOnDaki(d,e.clientX,e.clientY)) continue;
-      d.dragging=true;
+      d.dragging=true; d.pid=e.pointerId; d.touch=e.pointerType==='touch';
       d.dragOX=e.clientX-d.x; d.dragOY=e.clientY-d.y;
       d.lastDX=0; d.lastDY=0;
       d.touchNX=(e.clientX-d.x)/(d.w/2);
@@ -580,41 +742,47 @@ Per la realizzazione ho raccolto dai principali database paleontologici un archi
     }
   });
 
-  document.addEventListener('mousemove',e=>{
+  document.addEventListener('pointermove',e=>{
     $('#pool').ripples('drop',e.clientX,e.clientY,18,0.025);
+    const hover = e.pointerType!=='touch';
     dakis.forEach(d=>{
       if(d.dragging){
+        if(d.pid!==e.pointerId) return;
         d.lastDX=(e.clientX-d.dragOX)-d.x;
         d.lastDY=(e.clientY-d.dragOY)-d.y;
         d.x=e.clientX-d.dragOX; d.y=e.clientY-d.dragOY;
         $('#pool').ripples('drop',e.clientX,e.clientY,40,0.08);
-      } else if(isOnDaki(d,e.clientX,e.clientY)){
+      } else if(hover && isOnDaki(d,e.clientX,e.clientY)){
         $('#pool').ripples('drop',e.clientX,e.clientY,12,0.04);
         const rx=((e.clientX-(d.x-d.w/2))/d.w*100).toFixed(1);
         const ry=((e.clientY-(d.y-d.h/2))/d.h*100).toFixed(1);
         d.waveOverlay.style.background=`radial-gradient(circle at ${rx}% ${ry}%,rgba(255,255,255,0.18) 0%,rgba(100,200,255,0.08) 40%,transparent 70%)`;
         d.hoverIntensity=Math.min(d.hoverIntensity+0.08,1);
-      } else {
+      } else if(hover){
         d.hoverIntensity=Math.max(d.hoverIntensity-0.05,0);
       }
     });
   });
 
-  document.addEventListener('mouseup',e=>{
+  function endDrag(e,cancelled){
     dakis.forEach((d,idx)=>{
-      if(!d.dragging) return;
+      if(!d.dragging||d.pid!==e.pointerId) return;
       const dist=Math.hypot(e.clientX-d.mdX,e.clientY-d.mdY);
-      if(dist<8) openPanel(idx);
-      else{ d.vx=d.lastDX*0.7; d.vy=d.lastDY*0.7; }
-      d.dragging=false; d.touchNX=0; d.touchNZ=0;
+      if(!cancelled && dist<(d.touch?12:8)){
+        if(d.round) toggleLang(); else openPanel(idx);
+      } else if(!cancelled){ d.vx=d.lastDX*0.7; d.vy=d.lastDY*0.7; }
+      d.dragging=false; d.pid=null; d.touchNX=0; d.touchNZ=0;
     });
-  });
+  }
+  document.addEventListener('pointerup',  e=>endDrag(e,false));
+  document.addEventListener('pointercancel',e=>endDrag(e,true));
 
   let t=0;
   function loop(){
     requestAnimationFrame(loop);
     t+=0.016;
     dakis.forEach(d=>{
+      d.wave=getWaveAt(d.x,d.y);               // una lettura per daki per frame
       if(!d.dragging){
         const mv=15;
         d.vx=Math.max(-mv,Math.min(mv,d.vx));
@@ -629,7 +797,7 @@ Per la realizzazione ho raccolto dai principali database paleontologici un archi
         const ph=d.phase;
         d.vx+=Math.sin(t*0.3+ph)*0.012+Math.sin(t*0.17+ph+1.2)*0.006;
         d.vy+=Math.cos(t*0.25+ph+0.8)*0.008+Math.cos(t*0.13+ph+2.1)*0.004;
-        const w=getWaveAt(d.x,d.y);
+        const w=d.wave;
         d.vx+=w.gx*1.1; d.vy+=w.gy*1.1;
         if(Math.random()<0.04) $('#pool').ripples('drop',d.x+(Math.random()-.5)*60,d.y+(Math.random()-.5)*120,12,0.012);
         if(Math.hypot(d.vx,d.vy)>0.3) $('#pool').ripples('drop',d.x,d.y,20,Math.min(Math.hypot(d.vx,d.vy)*0.012,0.06));
@@ -668,7 +836,15 @@ Per la realizzazione ho raccolto dai principali database paleontologici un archi
     }
 
     dakis.forEach(d=>{
-      const w=getWaveAt(d.x,d.y);
+      const w=d.wave;
+      // giro del salvagente al toggle: la texture cambia a metà
+      if(d.spin>0){
+        d.spin+=0.025;
+        if(d.pending&&d.spin>=0.5){ drawBuoy(buoyCode()); d.pending=false; }
+        const p=Math.min(d.spin,1);
+        d.spinAng=360*(p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2);
+        if(d.spin>=1){ d.spin=0; d.spinAng=0; }
+      }
       const bs=1+w.h*0.04;
       const tRZ=w.gx*28+Math.sin(t*0.8+d.phase)*2-d.sinkZ;
       const tRX=w.gy*20+Math.sin(t*0.6+d.phase+1)*1.5+d.sinkX;
@@ -677,7 +853,7 @@ Per la realizzazione ho raccolto dai principali database paleontologici un archi
       d.heightBob+=(tb-d.heightBob)*0.12;
       d.el.style.left=(d.x-d.w/2)+'px';
       d.el.style.top=(d.y-d.h/2)+'px';
-      d.el.style.transform=`perspective(1000px) rotateZ(${d.rotZ}deg) rotateX(${d.rotX}deg) translateY(${d.heightBob}px) scale(${bs})`;
+      d.el.style.transform=`perspective(1000px) rotateZ(${d.rotZ+d.spinAng}deg) rotateX(${d.rotX}deg) translateY(${d.heightBob}px) scale(${bs})`;
       d.el.style.filter=`brightness(${100+d.heightBob*0.4}%) contrast(${100-d.heightBob*0.1}%)`;
       d.waveOverlay.style.opacity=d.hoverIntensity;
       d.reflection.style.backgroundPosition=`${Math.sin(t*0.4+d.phase)*20+d.x*0.05}px ${Math.cos(t*0.3+d.phase)*20+d.y*0.05}px`;
