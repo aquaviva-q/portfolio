@@ -118,7 +118,7 @@
     }
     .book-mini-btn:hover { color:#fff; background:rgba(255,255,255,0.10); }
     #panel-book-note { display:none; margin-top:10px; color:#555; font-family:monospace; font-size:10px; letter-spacing:1px; text-align:center; }
-    html[lang="en"] #panel-book-note { display:block; }
+    html:not([lang="it"]) #panel-book-note { display:block; }
 
     #panel-book-stage {
       position:relative;
@@ -305,7 +305,8 @@
 
   // ── LINGUA ────────────────────────────────────────────────────
   let lang = 'it';
-  try { if (localStorage.getItem('lang') === 'en') lang = 'en'; } catch {}
+  const LANGS = ['it','en','zh'];
+  try { const sv = localStorage.getItem('lang'); if (LANGS.includes(sv)) lang = sv; } catch {}
   let currentPanel = null;
 
   const UI = {
@@ -317,9 +318,13 @@
           pages:'pages', hint:'← → to turn page · ESC to close', close:'✕ close',
           contacts:'Contacts', bookNote:'The thesis pages are in Italian.',
           notFound:'images not found — check ./tesi-pages/tesi_1.webp' },
+    zh: { loading:'加载中...', searching:'正在查找图片...', fullscreen:'⤢ 全屏',
+          pages:'页', hint:'← → 翻页 · ESC 关闭', close:'✕ 关闭',
+          contacts:'联系', bookNote:'论文页面为意大利语。',
+          notFound:'未找到图片 — 请检查 ./tesi-pages/tesi_1.webp' },
   };
   const ui  = k => UI[lang][k];
-  const txt = (d, f) => (lang === 'en' && d.en && d.en[f]) || d[f];
+  const txt = (d, f) => (lang !== 'it' && d[lang] && d[lang][f]) || d[f];
 
   function pageUrl(n) {
    return `${TESI_FOLDER}/${TESI_PREFIX}${n}${TESI_EXT}`;
@@ -532,6 +537,32 @@ For the piece I gathered an archive of about 22,000 ammonite species names from 
     },
   ];
 
+  panelData[0].zh = {
+    sub:'硕士论文 · 2026',
+    body:`《Fake Accelerationism》探究了使当代公共领域转变为一种独特生态系统——后真相生态——的各种条件。在这一生态中，知识的价值不再取决于它与经验现实的一致性，而在于它能否广泛传播并引发情感上的认同。
+
+通过分析“月球骗局”（The Great Moon Hoax）、对玛丽娜·阿布拉莫维奇（Marina Abramović）表演的偏执式解读，以及“鸟类并不存在”（Birds Aren't Real）运动等案例，本研究指出，阴谋美学是一种叙事技术，能够直接作用于现实的生产。
+
+本研究放弃了反驳的逻辑，选择从伪造装置内部介入，采取一种加速主义的姿态。借助“超迷信”（hyperstition）概念与“精神分裂式蒙太奇”的实践，伪造不被驳斥，而是被栖居，并被推向一种受控的脱轨。
+
+在此基础上展开“超迷信剧场”，并以项目《The Fake Is Present》为例。`
+  };
+  panelData[1].zh = {
+    sub:'歌词视频 · Python · 2025',
+    body:`这支视频完全由代码构建。一个用 Python 开发的系统，依据人工设定的时间谱，将每一帧与歌曲结构同步，交替使用成对的正片与负片图像，剪辑极其迅速，最短仅 50 毫秒。
+
+粉丝自制项目。音乐的所有权利归 Charli XCX 所有。`
+  };
+  panelData[2].zh = {
+    sub:'Ammono Species Memory Retrieval · 声音装置 · Terreno Comune，威尼斯 · 2025',
+    body:`这是一件声音装置，模拟与已灭绝生命形式之间的一条通信线路，一个可栖居的边缘：在这里，虚空不是缺失，而是回声，是化石般的在场。一个被训练成低声耳语的语音合成模型，念诵已知菊石物种的名称。ASMR 式的体验邀请人们倾听，将虚空激活为一道门槛，中生代的恒定不变在亲密而陌生的感官语境中得以展开。倾听成为一种身体性的、沉浸式的行为，一场与史前他者的相遇，悬于唤起与想象之间。
+
+为完成这件作品，我从主要的古生物学数据库中收集了约 22,000 个菊石物种名称，用 Python 处理，并通过为耳语式 ASMR 效果配置的 TTS（文字转语音）库转换为语音。声音作品时长约十个半小时。`
+  };
+  panelData[3].zh = {
+    body:`Andrea 毕业于威尼斯 Iuav 大学戏剧与编舞研究专业，毕业论文探讨阴谋美学以及伪造生产现实的能力。他的研究处于表演理论、互联网语言与后真相文化的交叉地带。通过装置、视频、写作与数字项目，他探究图像、叙事和技术装置如何影响对现实的感知。他的作品穿行于网络想象、边缘文化与当代虚构形式之间，将它们视为能够产生体验、欲望与信念的表演性材料。`
+  };
+
   const panelOverlay = document.getElementById('panel-overlay');
 
   function renderPanelText(idx) {
@@ -640,6 +671,13 @@ For the piece I gathered an archive of about 22,000 ammonite species names from 
     const g = c.getContext('2d');
     if (code === 'it') {
       ['#009246', '#f4f5f0', '#ce2b37'].forEach((col, i) => { g.fillStyle = col; g.fillRect(i * S / 3, 0, S / 3 + 1, S); });
+    } else if (code === 'zh') {
+      g.fillStyle = '#DE2910'; g.fillRect(0, 0, S, S);
+      g.fillStyle = '#FFDE00';
+      const star = (cx, cy, r, rot) => { g.beginPath(); for (let i = 0; i < 10; i++) { const a = rot + i * Math.PI / 5, rr = i % 2 ? r * .382 : r; g.lineTo(cx + Math.sin(a) * rr, cy - Math.cos(a) * rr); } g.closePath(); g.fill(); };
+      const bx = S * .17, by = S * .26;
+      star(bx, by, S * .1, 0);
+      [[.30,.08],[.38,.14],[.40,.22],[.36,.31]].forEach(([x, y]) => star(S * x, S * y, S * .036, Math.atan2(bx - S * x, -(by - S * y))));
     } else {
       g.fillStyle = '#012169'; g.fillRect(0, 0, S, S);
       const ln = (a, b, c2, d2, col, w) => { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(a, b); g.lineTo(c2, d2); g.stroke(); };
@@ -672,7 +710,8 @@ For the piece I gathered an archive of about 22,000 ammonite species names from 
   }
 
   // il salvagente mostra la bandiera della lingua verso cui si passa
-  const buoyCode = () => lang === 'it' ? 'en' : 'it';
+  const nextLang = () => LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length];
+  const buoyCode = nextLang;
 
   function applyLang(skipBuoy) {
     document.documentElement.lang = lang;
@@ -684,7 +723,7 @@ For the piece I gathered an archive of about 22,000 ammonite species names from 
   }
 
   function toggleLang() {
-    lang = lang === 'it' ? 'en' : 'it';
+    lang = nextLang();
     try { localStorage.setItem('lang', lang); } catch {}
     applyLang(true);                 // la texture cambia a metà giro
     buoy.spin = 0.001; buoy.pending = true;
@@ -777,10 +816,95 @@ For the piece I gathered an archive of about 22,000 ammonite species names from 
   document.addEventListener('pointerup',  e=>endDrag(e,false));
   document.addEventListener('pointercancel',e=>endDrag(e,true));
 
+  // ── MOTION: inclina e scuoti (nessun pulsante) ────────────────
+  const MO = { G:9.8, k:0.045, dead:0.6, shake:12, cooldown:350 };
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  const NEEDS_PERM = typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function';
+  const SIGN = IOS ? -1 : 1;   // iOS riporta l'accelerazione col segno opposto (se va al contrario, metti 1)
+  let mAvail=false, mSrc=null, mBase=null, mLp=null, mShake=null, mLast=0, mListening=false;
+  const mTilt={x:0,y:0};
+  const scrAngle=()=>(((screen.orientation&&screen.orientation.angle!=null?screen.orientation.angle:(window.orientation||0))%360)+360)%360;
+  const toScreen=(x,y)=>{const a=scrAngle();return a===90?{x:y,y:-x}:a===180?{x:-x,y:-y}:a===270?{x:-y,y:x}:{x,y};};
+
+  function onMotion(e){
+    const a=e.accelerationIncludingGravity;
+    if(!a||a.x==null) return;
+    mSrc='motion'; mAvail=true;
+    const r={x:a.x,y:a.y,z:a.z||0};
+    if(!mLp) mLp={...r};
+    mLp.x+=(r.x-mLp.x)*0.12; mLp.y+=(r.y-mLp.y)*0.12; mLp.z+=(r.z-mLp.z)*0.12;
+    mTilt.x=-SIGN*mLp.x; mTilt.y=SIGN*mLp.y;                        // passa-basso = gravità
+    const lx=r.x-mLp.x, ly=r.y-mLp.y, lz=r.z-mLp.z;                 // passa-alto = scossa
+    const mag=Math.hypot(lx,ly,lz), now=performance.now();
+    if(mag>MO.shake && now-mLast>MO.cooldown){ mLast=now; mShake={x:-SIGN*lx,y:SIGN*ly,mag}; }
+    if(mBase){ mBase.x+=(mTilt.x-mBase.x)*0.0015; mBase.y+=(mTilt.y-mBase.y)*0.0015; }  // posa neutra adattiva
+  }
+  function onOrient(e){            // fallback senza accelerometro: solo inclinazione
+    if(mSrc==='motion'||e.beta==null) return;
+    mSrc='orient'; mAvail=true;
+    const c=v=>Math.max(-90,Math.min(90,v))*Math.PI/180;
+    mTilt.x=MO.G*Math.sin(c(e.gamma)); mTilt.y=MO.G*Math.sin(c(e.beta));
+  }
+  function listenMotion(){
+    if(mListening) return; mListening=true;
+    addEventListener('devicemotion',onMotion);
+    addEventListener('deviceorientation',onOrient);
+    const reset=()=>{mBase=null;};
+    addEventListener('orientationchange',reset);
+    if(screen.orientation&&screen.orientation.addEventListener) screen.orientation.addEventListener('change',reset);
+  }
+  if(!NEEDS_PERM) listenMotion();             // Android / altri: parte da solo
+  else {                                      // iOS: il permesso si chiede al primo tocco
+    let asked=false;
+    const ask=()=>{
+      if(asked) return; asked=true;
+      DeviceMotionEvent.requestPermission().then(r=>{
+        if(r==='granted'){
+          listenMotion();
+          if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function') DeviceOrientationEvent.requestPermission().catch(()=>{});
+        }
+      }).catch(()=>{ asked=false; });
+    };
+    ['click','touchend'].forEach(ev=>addEventListener(ev,ask));
+  }
+
+  function motionStep(){
+    if(!mAvail||document.hidden) return;
+    if(!mBase) mBase={x:mTilt.x,y:mTilt.y};   // prima lettura = come impugni il telefono
+    const p=toScreen(mTilt.x-mBase.x,mTilt.y-mBase.y), m=Math.hypot(p.x,p.y);
+    if(m>MO.dead){
+      const f=(m-MO.dead)/m;
+      dakis.forEach(d=>{
+        if(d.dragging) return;
+        const w=d.round?1.35:1;               // il salvagente è più leggero
+        d.vx+=p.x*f*MO.k*w; d.vy+=p.y*f*MO.k*w;
+      });
+      const s=Math.min(m/MO.G,1);             // l'acqua si accumula dal lato inclinato
+      if(Math.random()<s*0.6){
+        const ux=p.x/m, uy=p.y/m, lat=Math.random()-.5;
+        const x=innerWidth/2+ux*innerWidth*.46-uy*lat*innerWidth*.9;
+        const y=innerHeight/2+uy*innerHeight*.46+ux*lat*innerHeight*.9;
+        $('#pool').ripples('drop',Math.max(0,Math.min(innerWidth,x)),Math.max(0,Math.min(innerHeight,y)),16+s*14,0.02+s*0.04);
+      }
+    }
+    if(mShake){
+      const s=Math.min(mShake.mag/MO.shake,3), v=toScreen(mShake.x,mShake.y), vm=Math.hypot(v.x,v.y)||1;
+      dakis.forEach(d=>{
+        if(d.dragging) return;
+        d.vx+=v.x/vm*6*s+(Math.random()-.5)*8*s;
+        d.vy+=v.y/vm*6*s+(Math.random()-.5)*8*s;
+      });
+      for(let i=0;i<8+4*s;i++) $('#pool').ripples('drop',Math.random()*innerWidth,Math.random()*innerHeight,22+Math.random()*20,0.08+Math.random()*0.08);
+      if(navigator.vibrate) navigator.vibrate(25);
+      mShake=null;
+    }
+  }
+
   let t=0;
   function loop(){
     requestAnimationFrame(loop);
     t+=0.016;
+    motionStep();
     dakis.forEach(d=>{
       d.wave=getWaveAt(d.x,d.y);               // una lettura per daki per frame
       if(!d.dragging){
