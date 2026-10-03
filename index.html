@@ -816,88 +816,33 @@ For the piece I gathered an archive of about 22,000 ammonite species names from 
   document.addEventListener('pointerup',  e=>endDrag(e,false));
   document.addEventListener('pointercancel',e=>endDrag(e,true));
 
-  // ── MOTION: inclina e scuoti (nessun pulsante) ────────────────
-  const MO = { G:9.8, k:0.045, dead:0.6, shake:12, cooldown:350 };
-  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
-  const NEEDS_PERM = typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function';
-  const SIGN = IOS ? -1 : 1;   // iOS riporta l'accelerazione col segno opposto (se va al contrario, metti 1)
-  let mAvail=false, mSrc=null, mBase=null, mLp=null, mShake=null, mLast=0, mListening=false;
-  const mTilt={x:0,y:0};
+  // ── SCOSSA: scuoti il dispositivo e gli elementi si muovono ───
+  // Nessun permesso richiesto: su iOS Safari i sensori restano bloccati, quindi lì non succede nulla.
+  const SHAKE = { threshold:12, cooldown:350 };
+  let shakeLp=null, shakeV=null, shakeLast=0;
   const scrAngle=()=>(((screen.orientation&&screen.orientation.angle!=null?screen.orientation.angle:(window.orientation||0))%360)+360)%360;
   const toScreen=(x,y)=>{const a=scrAngle();return a===90?{x:y,y:-x}:a===180?{x:-x,y:-y}:a===270?{x:-y,y:x}:{x,y};};
 
-  function onMotion(e){
+  addEventListener('devicemotion',e=>{
     const a=e.accelerationIncludingGravity;
     if(!a||a.x==null) return;
-    mSrc='motion'; mAvail=true;
     const r={x:a.x,y:a.y,z:a.z||0};
-    if(!mLp) mLp={...r};
-    mLp.x+=(r.x-mLp.x)*0.12; mLp.y+=(r.y-mLp.y)*0.12; mLp.z+=(r.z-mLp.z)*0.12;
-    mTilt.x=-SIGN*mLp.x; mTilt.y=SIGN*mLp.y;                        // passa-basso = gravità
-    const lx=r.x-mLp.x, ly=r.y-mLp.y, lz=r.z-mLp.z;                 // passa-alto = scossa
+    if(!shakeLp) shakeLp={...r};
+    shakeLp.x+=(r.x-shakeLp.x)*0.12; shakeLp.y+=(r.y-shakeLp.y)*0.12; shakeLp.z+=(r.z-shakeLp.z)*0.12;  // stima della gravità
+    const lx=r.x-shakeLp.x, ly=r.y-shakeLp.y, lz=r.z-shakeLp.z;                                       // accelerazione "pura"
     const mag=Math.hypot(lx,ly,lz), now=performance.now();
-    if(mag>MO.shake && now-mLast>MO.cooldown){ mLast=now; mShake={x:-SIGN*lx,y:SIGN*ly,mag}; }
-    if(mBase){ mBase.x+=(mTilt.x-mBase.x)*0.0015; mBase.y+=(mTilt.y-mBase.y)*0.0015; }  // posa neutra adattiva
-  }
-  function onOrient(e){            // fallback senza accelerometro: solo inclinazione
-    if(mSrc==='motion'||e.beta==null) return;
-    mSrc='orient'; mAvail=true;
-    const c=v=>Math.max(-90,Math.min(90,v))*Math.PI/180;
-    mTilt.x=MO.G*Math.sin(c(e.gamma)); mTilt.y=MO.G*Math.sin(c(e.beta));
-  }
-  function listenMotion(){
-    if(mListening) return; mListening=true;
-    addEventListener('devicemotion',onMotion);
-    addEventListener('deviceorientation',onOrient);
-    const reset=()=>{mBase=null;};
-    addEventListener('orientationchange',reset);
-    if(screen.orientation&&screen.orientation.addEventListener) screen.orientation.addEventListener('change',reset);
-  }
-  if(!NEEDS_PERM) listenMotion();             // Android / altri: parte da solo
-  else {                                      // iOS: il permesso si chiede al primo tocco
-    let asked=false;
-    const ask=()=>{
-      if(asked) return; asked=true;
-      DeviceMotionEvent.requestPermission().then(r=>{
-        if(r==='granted'){
-          listenMotion();
-          if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function') DeviceOrientationEvent.requestPermission().catch(()=>{});
-        }
-      }).catch(()=>{ asked=false; });
-    };
-    ['click','touchend'].forEach(ev=>addEventListener(ev,ask));
-  }
+    if(mag>SHAKE.threshold && now-shakeLast>SHAKE.cooldown){ shakeLast=now; shakeV={x:-lx,y:ly,mag}; }
+  });
 
   function motionStep(){
-    if(!mAvail||document.hidden) return;
-    if(!mBase) mBase={x:mTilt.x,y:mTilt.y};   // prima lettura = come impugni il telefono
-    const p=toScreen(mTilt.x-mBase.x,mTilt.y-mBase.y), m=Math.hypot(p.x,p.y);
-    if(m>MO.dead){
-      const f=(m-MO.dead)/m;
-      dakis.forEach(d=>{
-        if(d.dragging) return;
-        const w=d.round?1.35:1;               // il salvagente è più leggero
-        d.vx+=p.x*f*MO.k*w; d.vy+=p.y*f*MO.k*w;
-      });
-      const s=Math.min(m/MO.G,1);             // l'acqua si accumula dal lato inclinato
-      if(Math.random()<s*0.6){
-        const ux=p.x/m, uy=p.y/m, lat=Math.random()-.5;
-        const x=innerWidth/2+ux*innerWidth*.46-uy*lat*innerWidth*.9;
-        const y=innerHeight/2+uy*innerHeight*.46+ux*lat*innerHeight*.9;
-        $('#pool').ripples('drop',Math.max(0,Math.min(innerWidth,x)),Math.max(0,Math.min(innerHeight,y)),16+s*14,0.02+s*0.04);
-      }
-    }
-    if(mShake){
-      const s=Math.min(mShake.mag/MO.shake,3), v=toScreen(mShake.x,mShake.y), vm=Math.hypot(v.x,v.y)||1;
-      dakis.forEach(d=>{
-        if(d.dragging) return;
-        d.vx+=v.x/vm*6*s+(Math.random()-.5)*8*s;
-        d.vy+=v.y/vm*6*s+(Math.random()-.5)*8*s;
-      });
-      for(let i=0;i<8+4*s;i++) $('#pool').ripples('drop',Math.random()*innerWidth,Math.random()*innerHeight,22+Math.random()*20,0.08+Math.random()*0.08);
-      if(navigator.vibrate) navigator.vibrate(25);
-      mShake=null;
-    }
+    if(!shakeV||document.hidden) return;
+    const s=Math.min(shakeV.mag/SHAKE.threshold,3), v=toScreen(shakeV.x,shakeV.y), vm=Math.hypot(v.x,v.y)||1;
+    dakis.forEach(d=>{                       // inerzia: spinta opposta alla scossa + un po' di caos
+      if(d.dragging) return;
+      d.vx+=v.x/vm*6*s+(Math.random()-.5)*8*s;
+      d.vy+=v.y/vm*6*s+(Math.random()-.5)*8*s;
+    });
+    shakeV=null;
   }
 
   let t=0;
